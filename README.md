@@ -15,9 +15,9 @@ sockets, reconnection strategies, offline queues, latency monitoring, middleware
 - ✅ **Middleware** for intercepting and transforming outgoing/incoming socket events
 - ✅ **AES Encryption** of payloads (optional, using `crypto-js`)
 - ✅ **Namespaced Socket Providers** with `createNamespacedSocket()` for modular isolation
-- ✅ **Fully Typed Hooks**: `useSocketContext`, `useSocketEvent`, `useLatency`, etc.
+- ✅ **Fully Typed Hooks**: `useSocketContext`, `useEvent`, `useLatency`, etc.
 - ✅ **Timeout-based ack() emits**: emit events with callback, with timeout fallback behavior
-- ✅ **Event Subscription Helpers**: auto cleanup with `useSocketEvent()` hook
+- ✅ **Event Subscription Helpers**: auto cleanup with `useEvent()` hook
 - ✅ **Queue Overflow Handling**: detect and manage maximum queue size violations
 - ✅ **Scoped Event Middleware**: different middlewares per namespace
 - ✅ **Integrated Debug Logging**: toggle log output for development
@@ -41,23 +41,95 @@ npm install react socket.io-client crypto-js
 ## 🧠 Basic Usage
 
 ```tsx
-import {SocketProvider, useSocketContext} from "socket.io-react-hooks-advanced";
+
+import React, {useEffect, useState} from "react";
+import {
+    SocketProvider,
+    useSocketContext,
+    useEvent
+} from "socket.io-react-hooks-advanced";
 
 function App() {
     return (
-        <SocketProvider url="http://localhost:3000" getToken={() => localStorage.getItem("token")}>
+        <SocketProvider
+            url="http://localhost:3000"
+            getToken={() => localStorage.getItem("token") || ""}
+            useEncryption={true}
+            encryptionKey="my-secret-key"
+            debug={true}
+        >
             <Main/>
         </SocketProvider>
     );
 }
 
 function Main() {
-    const {socket, emit, connected} = useSocketContext();
+    const {connected, emit, queue, latency} = useSocketContext();
+    const [message, setMessage] = useState("");
+    const [response, setResponse] = useState<string | null>(null);
+    const [received, setReceived] = useState<string[]>([]);
+
+    // 🔔 Subscribe to incoming messages
+    useEffect(() => {
+        const unsubscribe = useEvent("chat:receive", (msg) => {
+            setReceived((prev) => [...prev, JSON.stringify(msg)]);
+        });
+
+        return () => {
+            unsubscribe(); // Unsubscribes on unmount
+        };
+    }, []);
+
+    const sendMessage = () => {
+        emit(
+            "chat:send",
+            {text: message},
+            {
+                ack: (res) => setResponse(JSON.stringify(res)),
+                timeout: 3000,
+                encrypt: true
+            }
+        );
+        setMessage("");
+    };
 
     return (
         <div>
-            <p>Connected: {connected ? "Yes" : "No"}</p>
-            <button onClick={() => emit("message", {text: "Hi"})}>Send</button>
+            <h2>Socket.IO React Example</h2>
+            <p>Status: {connected ? "🟢 Connected" : "🔴 Disconnected"}</p>
+            <p>Ping: {latency ?? "..."} ms</p>
+
+            <input
+                type="text"
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                placeholder="Type your message"
+            />
+            <button onClick={sendMessage}>Send</button>
+
+            {response && <pre>Response: {response}</pre>}
+
+            {received.length > 0 && (
+                <div>
+                    <h4>Received Messages</h4>
+                    <ul>
+                        {received.map((msg, i) => (
+                            <li key={i}>{msg}</li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+
+            {queue.length > 0 && (
+                <div>
+                    <h4>Offline Queue</h4>
+                    <ul>
+                        {queue.map((q, i) => (
+                            <li key={i}>{q.event} - {JSON.stringify(q.data)}</li>
+                        ))}
+                    </ul>
+                </div>
+            )}
         </div>
     );
 }
@@ -73,13 +145,103 @@ import {createNamespacedSocket} from "socket.io-react-hooks-advanced";
 
 export const chatSocket = createNamespacedSocket();
 
+// notifSocket.ts
+import {createNamespacedSocket} from "socket.io-react-hooks-advanced";
+
+export const notifSocket = createNamespacedSocket();
+
 // App.tsx
-<chatSocket.Provider url="http://localhost:3000" namespace="/chat">
-    <Chat/>
-</chatSocket.Provider>
+import {chatSocket} from "./chatSocket";
+import {notifSocket} from "./notifSocket";
+
+function App() {
+    return (
+        <notifSocket.Provider url="http://localhost:3000" namespace="/notifications">
+            <chatSocket.Provider url="http://localhost:3000" namespace="/chat">
+                <Main/>
+            </chatSocket.Provider>
+        </notifSocket.Provider>
+    );
+}
+
+// Main.tsx
+import React from "react";
+import {Chat} from "./Chat";
+import {Notifications} from "./Notifications";
+
+export function Main() {
+    return (
+        <>
+            <Chat/>
+            <Notifications/>
+        </>
+    );
+}
 
 // Chat.tsx
-const {socket, emit} = chatSocket.useSocket();
+import React, {useState, useEffect} from "react";
+import {chatSocket} from "./chatSocket";
+
+export function Chat() {
+    const {emit, connected} = chatSocket.useSocket();
+    const [msg, setMsg] = useState("");
+    const [log, setLog] = useState<string[]>([]);
+
+    useEffect(() => {
+        const unsubscribe = chatSocket.useEvent("chat:message", (data) => {
+            setLog((prev) => [...prev, JSON.stringify(data)]);
+        });
+        return () => unsubscribe();
+    }, []);
+
+    return (
+        <div>
+            <h3>Chat Room</h3>
+            <p>Status: {connected ? "🟢" : "🔴"}</p>
+            <input
+                value={msg}
+                onChange={(e) => setMsg(e.target.value)}
+                placeholder="Type"
+            />
+            <button onClick={() => emit("chat:message", {msg})}>Send</button>
+
+            <ul>
+                {log.map((l, i) => (
+                    <li key={i}>{l}</li>
+                ))}
+            </ul>
+        </div>
+    );
+}
+
+// Notifications.tsx
+import React, {useEffect, useState} from "react";
+import {notifSocket} from "./notifSocket";
+
+export function Notifications() {
+    const {connected} = notifSocket.useSocket();
+    const [alerts, setAlerts] = useState<string[]>([]);
+
+    useEffect(() => {
+        const unsubscribe = notifSocket.useEvent("notif:alert", (data) => {
+            setAlerts((prev) => [...prev, JSON.stringify(data)]);
+        });
+        return () => unsubscribe();
+    }, []);
+
+    return (
+        <div>
+            <h3>Notifications</h3>
+            <p>Status: {connected ? "🟢" : "🔴"}</p>
+            <ul>
+                {alerts.map((alert, i) => (
+                    <li key={i}>{alert}</li>
+                ))}
+            </ul>
+        </div>
+    );
+}
+
 ```
 
 You can create and use multiple isolated namespaces simultaneously.
@@ -157,7 +319,7 @@ Returns:
 - `queue`: access queued events
 - `latency`: current latency in ms
 
-### `useSocketEvent(event, handler)`
+### `useEvent(event, handler)`
 
 Subscribes to a specific event and removes it automatically on unmount.
 

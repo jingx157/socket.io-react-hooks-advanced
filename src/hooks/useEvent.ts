@@ -8,7 +8,7 @@ export const useEvent = (
     handler: Handler,
     deps: any[] = []
 ) => {
-    const {socket} = useSocketContext();
+    const {socket, connected} = useSocketContext(); // include connected status
     const savedHandler = useRef<Handler>();
 
     useEffect(() => {
@@ -16,16 +16,15 @@ export const useEvent = (
     }, [handler]);
 
     useEffect(() => {
-        if (!socket) return;
+        if (!socket || !connected) return;
 
         const listener: Handler = (...args) => {
             savedHandler.current?.(...args);
         };
 
         socket.on(event, listener);
-
         return () => {
             socket.off(event, listener);
         };
-    }, [socket, event, ...deps]);
+    }, [socket, event, connected, ...deps]); // add `connected` to dependencies
 };
