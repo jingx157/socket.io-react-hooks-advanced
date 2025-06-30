@@ -23,7 +23,7 @@ interface Props {
     queueTTL?: number;
     namespace?: string;
     contextOverride?: React.Context<SocketContextType>;
-
+    extraHeaders?: Record<string, any>;
 
 }
 
@@ -42,7 +42,8 @@ export const SocketProvider: React.FC<Props> = ({
                                                     children,
                                                     persistQueue,
                                                     queueKey,
-                                                    queueTTL
+                                                    queueTTL,
+                                                    extraHeaders
                                                 }) => {
     const [socket, setSocket] = useState<Socket | null>(null);
     const [connected, setConnected] = useState(false);
@@ -81,11 +82,12 @@ export const SocketProvider: React.FC<Props> = ({
     );
 
     useEffect(() => {
-        if (!authToken) return;
-
         manualDisconnectRef.current = false;
         const socketInstance = io(url, {
-            auth: {token: authToken},
+            auth: {
+                ...(authToken ? {token: authToken} : {}),
+                ...(extraHeaders || {}),
+            },
             transports: ["websocket", "polling"],
             autoConnect: false,
         });

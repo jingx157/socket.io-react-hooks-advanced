@@ -57,6 +57,7 @@ function App() {
             useEncryption={true}
             encryptionKey="my-secret-key"
             debug={true}
+            extraHeaders={{platform: "web", appId: "myAppId123"}} // x-platform, x-appId, other...
         >
             <Main/>
         </SocketProvider>
@@ -69,16 +70,9 @@ function Main() {
     const [response, setResponse] = useState<string | null>(null);
     const [received, setReceived] = useState<string[]>([]);
 
-    // 🔔 Subscribe to incoming messages
-    useEffect(() => {
-        const unsubscribe = useEvent("chat:receive", (msg) => {
-            setReceived((prev) => [...prev, JSON.stringify(msg)]);
-        });
-
-        return () => {
-            unsubscribe(); // Unsubscribes on unmount
-        };
-    }, []);
+    useEvent("chat:receive", (msg) => {
+        setReceived((prev) => [...prev, JSON.stringify(msg)]);
+    });
 
     const sendMessage = () => {
         emit(
@@ -187,12 +181,9 @@ export function Chat() {
     const [msg, setMsg] = useState("");
     const [log, setLog] = useState<string[]>([]);
 
-    useEffect(() => {
-        const unsubscribe = chatSocket.useEvent("chat:message", (data) => {
-            setLog((prev) => [...prev, JSON.stringify(data)]);
-        });
-        return () => unsubscribe();
-    }, []);
+    chatSocket.useEvent("chat:message", (data) => {
+        setLog((prev) => [...prev, JSON.stringify(data)]);
+    });
 
     return (
         <div>
@@ -222,12 +213,9 @@ export function Notifications() {
     const {connected} = notifSocket.useSocket();
     const [alerts, setAlerts] = useState<string[]>([]);
 
-    useEffect(() => {
-        const unsubscribe = notifSocket.useEvent("notif:alert", (data) => {
-            setAlerts((prev) => [...prev, JSON.stringify(data)]);
-        });
-        return () => unsubscribe();
-    }, []);
+    notifSocket.useEvent("notif:alert", (data) => {
+        setAlerts((prev) => [...prev, JSON.stringify(data)]);
+    });
 
     return (
         <div>
@@ -287,23 +275,24 @@ Enable encryption in provider:
 
 ## ⚙️ Provider Options
 
-| Prop              | Type                              | Description                        |
-|-------------------|-----------------------------------|------------------------------------|
-| `url`             | `string`                          | Required socket server URL         |
-| `namespace`       | `string?`                         | Socket.IO namespace                |
-| `getToken`        | `() => string \| Promise<string>` | JWT token retriever                |
-| `onUnauthorized`  | `() => string \| Promise<string>` | Token refresh when unauthorized    |
-| `maxRetries`      | `number`                          | Max reconnection attempts          |
-| `initialDelayMs`  | `number`                          | Backoff initial delay              |
-| `backoffFactor`   | `number`                          | Backoff multiplier                 |
-| `persistQueue`    | `boolean`                         | Save queue in `localStorage`       |
-| `queueKey`        | `string`                          | Storage key name                   |
-| `queueTTL`        | `number`                          | Expiry in ms for stored queue      |
-| `maxQueueSize`    | `number`                          | Maximum offline queue size         |
-| `onQueueOverflow` | `(event) => void`                 | Called when queue exceeds max size |
-| `useEncryption`   | `boolean`                         | Enable payload encryption          |
-| `encryptionKey`   | `string`                          | AES key for encryption             |
-| `debug`           | `boolean`                         | Log connection/retry/status info   |
+| Prop              | Type                              | Description                          |
+|-------------------|-----------------------------------|--------------------------------------|
+| `url`             | `string`                          | Required socket server URL           |
+| `namespace`       | `string?`                         | Socket.IO namespace                  |
+| `getToken`        | `() => string \| Promise<string>` | JWT token retriever                  |
+| `onUnauthorized`  | `() => string \| Promise<string>` | Token refresh when unauthorized      |
+| `maxRetries`      | `number`                          | Max reconnection attempts            |
+| `initialDelayMs`  | `number`                          | Backoff initial delay                |
+| `backoffFactor`   | `number`                          | Backoff multiplier                   |
+| `persistQueue`    | `boolean`                         | Save queue in `localStorage`         |
+| `queueKey`        | `string`                          | Storage key name                     |
+| `queueTTL`        | `number`                          | Expiry in ms for stored queue        |
+| `maxQueueSize`    | `number`                          | Maximum offline queue size           |
+| `onQueueOverflow` | `(event) => void`                 | Called when queue exceeds max size   |
+| `useEncryption`   | `boolean`                         | Enable payload encryption            |
+| `encryptionKey`   | `string`                          | AES key for encryption               |
+| `debug`           | `boolean`                         | Log connection/retry/status info     |
+| `extraHeaders`    | `record`                          | add custom extra header when connect |
 
 ---
 

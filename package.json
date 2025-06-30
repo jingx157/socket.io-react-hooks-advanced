@@ -1,6 +1,6 @@
 {
   "name": "socket.io-react-hooks-advanced",
-  "version": "1.0.3",
+  "version": "1.0.6",
   "description": "A modular and extensible React + Socket.IO hook library designed for real-world applications. Supports namespaced sockets, reconnection strategies, offline queues, latency monitoring, middleware, encryption, and more.\n",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
